@@ -1,0 +1,19 @@
+{
+  "name": "pop3-remove-alerts",
+  "version": "1.0.0",
+  "description": "Remove alert mails from POP3 server",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "townewgokgok <townewgokgok@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "ansi": "^0.3.1",
+    "http-string-parser": "0.0.5",
+    "js-yaml": "^3.5.2",
+    "mailparser": "^0.5.3",
+    "parse-headers": "^2.0.1",
+    "poplib": "^0.1.7"
+  }
+}
