@@ -2,3 +2,5 @@ host: popXX.sakura.ad.jp
 port: 110
 user: a-sakuraha
 pass: ********
+desc: false
+deleteBefore: 2016-02-03T11:00:00+09:00

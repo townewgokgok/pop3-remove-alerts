@@ -5,16 +5,18 @@ var path = require('path');
 var yaml = require('js-yaml');
 var config = yaml.safeLoad(fs.readFileSync(path.resolve(__dirname, 'config.yml'), 'utf8'));
 var POP3Client = require('poplib');
-var MailParser = require("mailparser").MailParser;
+var MailParser = require('mailparser').MailParser;
+var moment = require('moment');
 var ansi = require('ansi');
 var cursor = ansi(process.stdout);
 
 
+var deleteBefore = moment(config.deleteBefore);
 
 function ruleToDelete(headers) {
-    return
-        headers.from.match(/^apache\@/) &&
-        headers.subject.match(/(mongo exception|service unavailable)/);
+    return moment(headers.date).isBefore(deleteBefore) ||
+        headers.from.match(/apache\@/) &&
+        headers.subject.match(/(mongo exception|service unavailable|cloud-error)/);
 }
 
 
@@ -41,6 +43,7 @@ client.on('login', function(status, rawdata) {
 });
 
 var current = 0;
+var direction = config.desc ? -1 : 1;
 var total = 0;
 var deleted = 0;
 
@@ -57,13 +60,14 @@ client.on('list', function(status, msgcount, msgnumber, data, rawdata) {
         process.exit();
         return;
     }
-    current = 0;
+    current = 0<direction ? 0 : msgcount+1;
     total = msgcount;
     processNext();
 });
 
 function processNext() {
-    if (++current <= total) {
+    current += direction;
+    if (1<= current && current <= total) {
         client.top(current, 0);
     }
     else {
