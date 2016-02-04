@@ -4,6 +4,7 @@
   "description": "Remove alert mails from POP3 server",
   "main": "index.js",
   "scripts": {
+    "start": "node remove.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "townewgokgok <townewgokgok@gmail.com>",
