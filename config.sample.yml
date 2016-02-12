@@ -1,6 +1,9 @@
-host: popXX.sakura.ad.jp
+host: pop.example.com
 port: 110
-user: a-sakuraha
+user: username
 pass: ********
 desc: false
-deleteBefore: 2016-02-03T11:00:00+09:00
+deleteBefore: 1970-01-01T09:00:00+09:00
+deleteRule:
+  from: !!js/regexp /^(cron|apache)\@/i
+  subject: !!js/regexp /(error|emergency)/i

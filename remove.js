@@ -3,7 +3,10 @@
 var fs = require('fs');
 var path = require('path');
 var yaml = require('js-yaml');
-var config = yaml.safeLoad(fs.readFileSync(path.resolve(__dirname, 'config.yml'), 'utf8'));
+var config = yaml.safeLoad(
+    fs.readFileSync(path.resolve(__dirname, 'config.yml'), 'utf8'),
+    { schema: yaml.DEFAULT_FULL_SCHEMA }
+);
 var POP3Client = require('poplib');
 var MailParser = require('mailparser').MailParser;
 var moment = require('moment');
@@ -11,12 +14,20 @@ var ansi = require('ansi');
 var cursor = ansi(process.stdout);
 
 
+if (!config.deleteRule || Object.keys(config.deleteRule).length == 0) {
+    throw '"deleteRule:" is not defined in config.yml';
+}
 var deleteBefore = moment(config.deleteBefore);
 
-function ruleToDelete(headers) {
-    return moment(headers.date).isBefore(deleteBefore) ||
-        headers.from.match(/apache\@/) &&
-        headers.subject.match(/(mongo exception|service unavailable|cloud-error)/);
+function matches(headers) {
+    if (moment(headers.date).isBefore(deleteBefore)) return true;
+    var result = true;
+    Object.keys(config.deleteRule).forEach(function(key){
+        if (headers[key] == null || !headers[key].match(config.deleteRule[key])) {
+            result = false;
+        }
+    });
+    return result;
 }
 
 
@@ -79,7 +90,7 @@ function processNext() {
 }
 
 function onDecode(obj) {
-    if (ruleToDelete(obj.headers)) {
+    if (matches(obj.headers)) {
         client.dele(current);
     }
     else {

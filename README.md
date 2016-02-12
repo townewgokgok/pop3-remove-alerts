@@ -9,7 +9,6 @@ git clone https://github.sakura.codes/k-furukawa/pop3-remove-alerts.git
 cd pop3-remove-alerts
 npm install
 cp config.sample.yml config.yml
-vim config.yml   # Edit your POP3 account settings
-vim remove.js    # Edit ruleToDelete() as needed
+vim config.yml   # Edit your POP3 account settings and delete rules
 npm start
 ```
