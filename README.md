@@ -5,7 +5,7 @@ Remove alert mails from POP3 server
 ## Usage
 
 ```bash
-git clone https://github.sakura.codes/k-furukawa/pop3-remove-alerts.git
+git clone https://github.com/townewgokgok/pop3-remove-alerts.git
 cd pop3-remove-alerts
 npm install
 cp config.sample.yml config.yml
