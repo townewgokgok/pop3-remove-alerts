@@ -32,94 +32,105 @@ function matches(headers) {
 
 
 
-var client = new POP3Client(config.port, config.host, {
-    tlserrs: false,
-    enabletls: false,
-    debug: false
-});
+function main() {
 
-client.on('connect', function() {
-    console.log('CONNECT success');
-    client.login(config.user, config.pass);
-});
+    var client = new POP3Client(config.port, config.host, {
+        tlserrs: false,
+        enabletls: false,
+        debug: false
+    });
 
-client.on('login', function(status, rawdata) {
-    if (!status) {
-        console.log('LOGIN/PASS failed');
-        client.quit();
-        return;
-    }
-    console.log('LOGIN/PASS success');
-    client.list();
-});
+    client.on('connect', function() {
+        console.log('CONNECT success');
+        client.login(config.user, config.pass);
+    });
 
-var current = 0;
-var direction = config.desc ? -1 : 1;
-var total = 0;
-var deleted = 0;
+    client.on('login', function(status, rawdata) {
+        if (!status) {
+            console.log('LOGIN/PASS failed');
+            client.quit();
+            return;
+        }
+        console.log('LOGIN/PASS success');
+        client.list();
+    });
 
-client.on('list', function(status, msgcount, msgnumber, data, rawdata) {
-    if (!status) {
-        console.log('LIST failed');
-        client.quit();
-        process.exit(1);
-        return;
-    }
-    console.log('LIST success with ' + msgcount + ' element(s)');
-    if (msgcount == 0) {
-        client.quit();
-        process.exit();
-        return;
-    }
-    current = 0<direction ? 0 : msgcount+1;
-    total = msgcount;
-    processNext();
-});
+    var current = 0;
+    var direction = config.desc ? -1 : 1;
+    var total = 0;
+    var marked = 0;
 
-function processNext() {
-    current += direction;
-    if (1<= current && current <= total) {
+    client.on('list', function(status, msgcount, msgnumber, data, rawdata) {
+        if (!status) {
+            console.log('LIST failed');
+            client.quit();
+            process.exit(1);
+            return;
+        }
+        console.log('LIST success with ' + msgcount + ' element(s)');
+        if (msgcount == 0) {
+            client.quit();
+            process.exit();
+            return;
+        }
+        current = 0<direction ? 0 : msgcount+1;
+        total = msgcount;
+        processNext();
+    });
+
+    function processNext() {
+        current += direction;
+        if (current < 1 || total < current) {
+            console.log('');
+            console.log('finished');
+            client.quit();
+            process.exit();
+            return;
+        }
+        if (config.step <= marked) {
+            marked = 0;
+            console.log('');
+            console.log('reconnecting...');
+            client.quit();
+            setTimeout(main, 1000);
+            return;
+        }
         client.top(current, 0);
     }
-    else {
-        console.log('');
-        console.log('finished');
-        client.quit();
-        process.exit();
+
+    function onDecode(obj) {
+        if (matches(obj.headers)) {
+            client.dele(current);
+        } else {
+            processNext();
+        }
+        console.log('  ' + current + ' / ' + total + ' (marked ' + marked + ')');
+        cursor.up();
     }
+
+    client.on('dele', function(status, msgnumber, rawdata) {
+        if (status) {
+            marked++;
+        } else {
+            cursor.eraseLine();
+            console.log('DELE ' + current + ' / ' + total + ' failed');
+        }
+        processNext();
+    });
+
+    client.on('top', function(status, msgnumber, data, rawdata) {
+        if (!status) {
+            cursor.eraseLine();
+            console.log('TOP ' + current + ' / ' + total + ' failed');
+            processNext();
+            return;
+        }
+        var parser = new MailParser();
+        parser.on('end', onDecode);
+        parser.write(data);
+        parser.end();
+    });
+
 }
 
-function onDecode(obj) {
-    if (matches(obj.headers)) {
-        client.dele(current);
-    }
-    else {
-        processNext();
-    }
-    console.log('  ' + current + ' / ' + total + ' (deleted ' + deleted + ')');
-    cursor.up();
-}
-
-client.on('dele', function(status, msgnumber, rawdata) {
-    if (status) {
-        deleted++;
-    }
-    else {
-        cursor.eraseLine();
-        console.log('DELE ' + current + ' / ' + total + ' failed');
-    }
-    processNext();
-});
-
-client.on('top', function(status, msgnumber, data, rawdata) {
-    if (!status) {
-        cursor.eraseLine();
-        console.log('TOP ' + current + ' / ' + total + ' failed');
-        processNext();
-        return;
-    }
-    var parser = new MailParser();
-    parser.on('end', onDecode);
-    parser.write(data);
-    parser.end();
-});
+main();
