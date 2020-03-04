@@ -1,29 +1,30 @@
 'use strict';
 
-var fs = require('fs');
-var path = require('path');
-var yaml = require('js-yaml');
-var config = yaml.safeLoad(
+const fs = require('fs');
+const path = require('path');
+const yaml = require('js-yaml');
+const config = yaml.safeLoad(
     fs.readFileSync(path.resolve(__dirname, 'config.yml'), 'utf8'),
     { schema: yaml.DEFAULT_FULL_SCHEMA }
 );
-var POP3Client = require('poplib');
-var MailParser = require('mailparser').MailParser;
-var moment = require('moment');
-var ansi = require('ansi');
-var cursor = ansi(process.stdout);
+const POP3Client = require('poplib');
+const MailParser = require('mailparser').MailParser;
+const moment = require('moment');
+const ansi = require('ansi');
+const cursor = ansi(process.stdout);
 
 
 if (!config.deleteRule || Object.keys(config.deleteRule).length == 0) {
     throw '"deleteRule:" is not defined in config.yml';
 }
-var deleteBefore = moment(config.deleteBefore);
+const deleteBefore = moment(config.deleteBefore);
 
 function matches(headers) {
     if (moment(headers.date).isBefore(deleteBefore)) return true;
-    var result = true;
+    let result = true;
     Object.keys(config.deleteRule).forEach(function(key){
-        if (headers[key] == null || !headers[key].match(config.deleteRule[key])) {
+        let v = headers[key]
+        if (v == null || !v.match(config.deleteRule[key])) {
             result = false;
         }
     });
@@ -32,48 +33,76 @@ function matches(headers) {
 
 
 
-function main() {
+function main(session, skip) {
 
-    var client = new POP3Client(config.port, config.host, {
+    const direction = config.des ? -1 : 1;
+    let current = 0;
+    let total = 0;
+    let marked = 0;
+    let quitting = false;
+
+    console.log(`#${session} connecting...`);
+    const client = new POP3Client(config.port, config.host, {
         tlserrs: false,
         enabletls: false,
         debug: false
     });
 
+    function reconnect() {
+        console.log('');
+        console.log(`#${session} quitting...`);
+        quitting = true;
+        client.on('quit', function() {
+            setTimeout(function(){
+                main(session+1, skip);
+            }, 1000);
+        });
+        client.quit();
+    }
+
+    let timer;
+    function stamp(quit) {
+        if (timer) clearTimeout(timer);
+        if (!quit) timer = setTimeout(reconnect, config.timeout);
+    }
+    stamp();
+
     client.on('connect', function() {
-        console.log('CONNECT success');
+        if (quitting) return;
+        stamp();
+        console.log(`#${session} CONNECT success`);
         client.login(config.user, config.pass);
     });
 
     client.on('login', function(status, rawdata) {
+        if (quitting) return;
+        stamp();
         if (!status) {
-            console.log('LOGIN/PASS failed');
-            client.quit();
+            console.log(`#${session} LOGIN/PASS failed`);
+            reconnect();
             return;
         }
-        console.log('LOGIN/PASS success');
+        console.log(`#${session} LOGIN/PASS success`);
         client.list();
     });
 
-    var current = 0;
-    var direction = config.desc ? -1 : 1;
-    var total = 0;
-    var marked = 0;
-
     client.on('list', function(status, msgcount, msgnumber, data, rawdata) {
+        if (quitting) return;
+        stamp();
         if (!status) {
-            console.log('LIST failed');
-            client.quit();
-            process.exit(1);
+            console.log(`#${session} LIST failed`);
+            reconnect();
             return;
         }
-        console.log('LIST success with ' + msgcount + ' element(s)');
+        console.log(`#${session} LIST success with ${msgcount} element(s)`);
         if (msgcount == 0) {
             client.quit();
+            stamp(true);
             process.exit();
             return;
         }
         current = 0<direction ? 0 : msgcount+1;
+        current += direction * skip;
         total = msgcount;
         processNext();
     });
@@ -82,17 +111,14 @@ function main() {
         current += direction;
         if (current < 1 || total < current) {
             console.log('');
-            console.log('finished');
+            console.log(`#${session} finished`);
             client.quit();
+            stamp(true);
             process.exit();
             return;
         }
         if (config.step <= marked) {
-            marked = 0;
-            console.log('');
-            console.log('reconnecting...');
-            client.quit();
-            setTimeout(main, 1000);
+            reconnect();
             return;
         }
         client.top(current, 0);
@@ -102,30 +128,38 @@ function main() {
         if (matches(obj.headers)) {
             client.dele(current);
         } else {
+            cursor.eraseLine();
+            console.log(obj.headers.from+" : "+obj.subject);
+            skip++;
             processNext();
         }
-        console.log('  ' + current + ' / ' + total + ' (marked ' + marked + ')');
+        console.log(`#${session}   ${current} / ${total} (marked ${marked}, skipped ${current-marked}}})`);
         cursor.up();
     }
 
     client.on('dele', function(status, msgnumber, rawdata) {
-        if (status) {
-            marked++;
-        } else {
+        if (quitting) return;
+        stamp();
+        if (!status) {
             cursor.eraseLine();
-            console.log('DELE ' + current + ' / ' + total + ' failed');
+            console.log(`#${session} DELE ${current} / ${total} failed`);
+            reconnect();
+            return;
         }
+        marked++;
         processNext();
     });
 
     client.on('top', function(status, msgnumber, data, rawdata) {
+        if (quitting) return;
+        stamp();
         if (!status) {
             cursor.eraseLine();
-            console.log('TOP ' + current + ' / ' + total + ' failed');
-            processNext();
+            console.log(`#${session} TOP ${current} / ${total} failed`);
+            reconnect();
             return;
         }
-        var parser = new MailParser();
+        const parser = new MailParser();
         parser.on('end', onDecode);
         parser.write(data);
         parser.end();
@@ -133,4 +167,4 @@ function main() {
 
 }
 
-main();
+main(1, config.skip);

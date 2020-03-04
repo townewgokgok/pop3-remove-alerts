@@ -4,6 +4,8 @@ user: username
 pass: ********
 desc: false
 step: 1000
+skip: 0
+timeout: 60000
 deleteBefore: 1970-01-01T09:00:00+09:00
 deleteRule:
   from: !!js/regexp /^(cron|apache)\@/i
