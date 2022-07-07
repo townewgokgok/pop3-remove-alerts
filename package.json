@@ -14,7 +14,7 @@
     "http-string-parser": "0.0.5",
     "js-yaml": "^3.13.1",
     "mailparser": "^0.5.3",
-    "moment": "^2.22.2",
+    "moment": "^2.29.4",
     "parse-headers": "^2.0.1",
     "poplib": "^0.1.7"
   }
